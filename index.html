@@ -51,7 +51,7 @@
 
   <div class="card">
     <div style="display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));">
-      <div><label>Current Time</label><input id="currentTime" type="time"></div>
+      <div><label>Current Time</label><input id="currentTime" type="time" value="00:00"></div>
       <div><label>Target End (Sleep) Time</label><input id="sleepTime" type="time" value="02:00"></div>
     </div>
     <label style="margin-top:6px;display:block;"><input type="checkbox" id="ignoreSleep"> Ignore end time (manual overtime allowed)</label>
@@ -172,15 +172,26 @@ function recalc(){
   const rem=allModules.filter(x=>!x.done);
   const completed=allModules.filter(x=>x.done);
   const nowM=mins(nowT),sleepM=mins(sleepT);
-  let tillSleep=(sleepM-nowM+1440)%1440;
+  let tillSleep;
+  let pastDeadline = false;
+  if(nowM <= sleepM) {
+    tillSleep = sleepM - nowM;
+  } else {
+    pastDeadline = true;
+    tillSleep = 0;
+  }
   let total=rem.reduce((s,a)=>s+a.min,0);
-  let diff = total - tillSleep;
   let overtime = 0;
   if (!ignore) {
-    if (diff > 0) overtime = diff;
-    else overtime = 0;
+    if (pastDeadline) {
+      overtime = total + (nowM - sleepM);
+    } else {
+      let diff = total - tillSleep;
+      if (diff > 0) overtime = diff;
+      else overtime = 0;
+    }
   } else {
-    overtime = total>0?0:0;
+    overtime = 0;
   }
   const timeline=document.getElementById("timeline");
   timeline.innerHTML="";
@@ -193,14 +204,22 @@ function recalc(){
     timeline.appendChild(div);
   });
   const finishTime = timeStr(nowM + total);
-  document.getElementById("track").className=overtime?"over":"ok";
-  document.getElementById("track").innerText=overtime?"Behind":"On track";
-  document.getElementById("summary").innerText=overtime?`Expected finish: ${finishTime} (Delayed by ${minToHours(overtime)})`:`Expected finish: ${finishTime}`;
+  if(pastDeadline && !ignore) {
+    document.getElementById("track").className="over";
+    document.getElementById("track").innerText="Past deadline";
+    const timePast = nowM - sleepM;
+    document.getElementById("summary").innerText=`Past deadline by ${minToHours(timePast)} | Expected finish: ${finishTime} (Total delay: ${minToHours(overtime)})`;
+  } else {
+    document.getElementById("track").className=overtime?"over":"ok";
+    document.getElementById("track").innerText=overtime?"Behind":"On track";
+    document.getElementById("summary").innerText=overtime?`Expected finish: ${finishTime} (Delayed by ${minToHours(overtime)})`:`Expected finish: ${finishTime}`;
+  }
   document.getElementById("studyMin").innerText=minToHours(total);
-  document.getElementById("timeLeft").innerText=minToHours(tillSleep);
+  document.getElementById("timeLeft").innerText=pastDeadline?"Past deadline":minToHours(tillSleep);
   document.getElementById("overtime").innerText=minToHours(overtime);
   let orderStr=rem.map(t=>"M"+t.id).join("→")||"All done";
-  document.getElementById("oneLine").innerText=`${nowT} | ${orderStr} | ${minToHours(total)} left | ${overtime?"Delay "+minToHours(overtime):"On time"} | Finish ≈ ${finishTime}`;
+  const statusText = pastDeadline && !ignore ? `Past deadline by ${minToHours(nowM - sleepM)}` : (overtime ? `Delay ${minToHours(overtime)}` : "On time");
+  document.getElementById("oneLine").innerText=`${nowT} | ${orderStr} | ${minToHours(total)} left | ${statusText} | Finish ≈ ${finishTime}`;
   
   showCompleted(completed,nowM);
 }
@@ -245,10 +264,16 @@ function showCompleted(completed,startTime){
 function clock(){
   let d=new Date();
   document.getElementById("clock").innerText=d.toLocaleTimeString();
-  document.getElementById("currentTime").value=nowHHMM();
+}
+function initSchedule(){
+  const currentTimeInput=document.getElementById("currentTime");
+  const sleepTimeInput=document.getElementById("sleepTime");
+  if(!currentTimeInput.value) currentTimeInput.value="00:00";
+  if(!sleepTimeInput.value) sleepTimeInput.value="02:00";
 }
 loadFromStorage();
 buildUI();
+initSchedule();
 setInterval(clock,1000);
 setInterval(recalc,1500);
 modulesDiv.addEventListener("change",function(e){
