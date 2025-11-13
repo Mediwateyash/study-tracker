@@ -91,13 +91,13 @@
 
 <script>
 let topics = [
- {id:1,name:"Module 1 – Intro & Hadoop",min:20,done:false,completedAt:null},
- {id:2,name:"Module 2 – HDFS & MapReduce",min:25,done:false,completedAt:null},
- {id:3,name:"Module 3 – NoSQL",min:25,done:false,completedAt:null},
- {id:4,name:"Module 4 – Mining Data Streams",min:25,done:false,completedAt:null},
- {id:5,name:"Module 5 – Real-Time Big Data Models",min:25,done:false,completedAt:null},
- {id:6,name:"Module 6 – R Programming",min:25,done:false,completedAt:null},
- {id:7,name:"Final Revision",min:5,done:false,completedAt:null}
+ {id:1,name:"Module 1 – Intro & Hadoop",min:15,done:false,completedAt:null},
+ {id:2,name:"Module 2 – HDFS & MapReduce",min:20,done:false,completedAt:null},
+ {id:3,name:"Module 3 – NoSQL",min:20,done:false,completedAt:null},
+ {id:4,name:"Module 4 – Data Streams",min:20,done:false,completedAt:null},
+ {id:5,name:"Module 5 – Real-Time Models",min:20,done:false,completedAt:null},
+ {id:6,name:"Module 6 – R Programming",min:20,done:false,completedAt:null},
+ {id:7,name:"Revision",min:5,done:false,completedAt:null}
 ];
 const modulesDiv=document.getElementById("modules");
 function pad(n){return String(n).padStart(2,"0");}
@@ -172,6 +172,7 @@ function recalc(){
   const rem=allModules.filter(x=>!x.done);
   const completed=allModules.filter(x=>x.done);
   const nowM=mins(nowT),sleepM=mins(sleepT);
+  const startTimeM=mins("00:00");
   let tillSleep;
   let pastDeadline = false;
   if(nowM <= sleepM) {
@@ -181,10 +182,14 @@ function recalc(){
     tillSleep = 0;
   }
   let total=rem.reduce((s,a)=>s+a.min,0);
+  const totalScheduled=topics.reduce((s,a)=>s+a.min,0);
+  const scheduledEnd=startTimeM+totalScheduled;
   let overtime = 0;
   if (!ignore) {
     if (pastDeadline) {
       overtime = total + (nowM - sleepM);
+    } else if(nowM > scheduledEnd) {
+      overtime = (nowM - scheduledEnd) + total;
     } else {
       let diff = total - tillSleep;
       if (diff > 0) overtime = diff;
@@ -195,20 +200,34 @@ function recalc(){
   }
   const timeline=document.getElementById("timeline");
   timeline.innerHTML="";
-  let ptr=nowM;
+  let ptr=startTimeM;
+  let isLate=false;
+  let currentModuleEnd=null;
   rem.forEach(t=>{
-    let st=ptr,en=ptr+t.min;ptr=en;
+    let st=ptr,en=ptr+t.min;
+    const isPast=nowM>en;
+    if(isPast && !t.done) {
+      isLate=true;
+      currentModuleEnd=en;
+    }
+    ptr=en;
     const div=document.createElement("div");
     div.className="line";
-    div.innerHTML=`<span>${t.name}</span><span>${timeStr(st)} → ${timeStr(en)}</span>`;
+    const lateClass=isPast && !t.done?"over":"";
+    div.innerHTML=`<span class="${lateClass}">${t.name}</span><span class="${lateClass}">${timeStr(st)} → ${timeStr(en)}${isPast && !t.done?" (LATE)":""}</span>`;
     timeline.appendChild(div);
   });
-  const finishTime = timeStr(nowM + total);
+  const finishTime = timeStr(startTimeM + total);
   if(pastDeadline && !ignore) {
     document.getElementById("track").className="over";
     document.getElementById("track").innerText="Past deadline";
     const timePast = nowM - sleepM;
     document.getElementById("summary").innerText=`Past deadline by ${minToHours(timePast)} | Expected finish: ${finishTime} (Total delay: ${minToHours(overtime)})`;
+  } else if(isLate && !ignore) {
+    const lateBy = nowM - currentModuleEnd;
+    document.getElementById("track").className="over";
+    document.getElementById("track").innerText="Late";
+    document.getElementById("summary").innerText=`Running late by ${minToHours(lateBy)} | Expected finish: ${finishTime} (Total delay: ${minToHours(overtime)})`;
   } else {
     document.getElementById("track").className=overtime?"over":"ok";
     document.getElementById("track").innerText=overtime?"Behind":"On track";
@@ -218,10 +237,17 @@ function recalc(){
   document.getElementById("timeLeft").innerText=pastDeadline?"Past deadline":minToHours(tillSleep);
   document.getElementById("overtime").innerText=minToHours(overtime);
   let orderStr=rem.map(t=>"M"+t.id).join("→")||"All done";
-  const statusText = pastDeadline && !ignore ? `Past deadline by ${minToHours(nowM - sleepM)}` : (overtime ? `Delay ${minToHours(overtime)}` : "On time");
+  let statusText;
+  if(pastDeadline && !ignore) {
+    statusText = `Past deadline by ${minToHours(nowM - sleepM)}`;
+  } else if(isLate && !ignore) {
+    statusText = `Late by ${minToHours(nowM - currentModuleEnd)}`;
+  } else {
+    statusText = overtime ? `Delay ${minToHours(overtime)}` : "On time";
+  }
   document.getElementById("oneLine").innerText=`${nowT} | ${orderStr} | ${minToHours(total)} left | ${statusText} | Finish ≈ ${finishTime}`;
   
-  showCompleted(completed,nowM);
+  showCompleted(completed,startTimeM);
 }
 function showCompleted(completed,startTime){
   const section=document.getElementById("completedSection");
@@ -232,7 +258,8 @@ function showCompleted(completed,startTime){
   }
   section.style.display="block";
   list.innerHTML="";
-  let ptr=startTime;
+  const startTimeM=mins("00:00");
+  let ptr=startTimeM;
   const completedMap=new Map(completed.map(c=>[c.id,c]));
   const allModules=[...modulesDiv.querySelectorAll(".mod")].map(el=>({
      id:+el.querySelector("input[type=checkbox]").dataset.id,
