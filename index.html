@@ -203,12 +203,14 @@ function recalc(){
   let ptr=startTimeM;
   let isLate=false;
   let currentModuleEnd=null;
+  let accumulatedDelay=0;
   rem.forEach(t=>{
     let st=ptr,en=ptr+t.min;
     const isPast=nowM>en;
     if(isPast && !t.done) {
       isLate=true;
       currentModuleEnd=en;
+      accumulatedDelay=nowM-en;
     }
     ptr=en;
     const div=document.createElement("div");
@@ -217,17 +219,19 @@ function recalc(){
     div.innerHTML=`<span class="${lateClass}">${t.name}</span><span class="${lateClass}">${timeStr(st)} → ${timeStr(en)}${isPast && !t.done?" (LATE)":""}</span>`;
     timeline.appendChild(div);
   });
-  const finishTime = timeStr(startTimeM + total);
+  const baseFinishTime = startTimeM + total;
+  const adjustedFinishTime = baseFinishTime + accumulatedDelay;
+  const finishTime = timeStr(adjustedFinishTime);
   if(pastDeadline && !ignore) {
     document.getElementById("track").className="over";
     document.getElementById("track").innerText="Past deadline";
     const timePast = nowM - sleepM;
     document.getElementById("summary").innerText=`Past deadline by ${minToHours(timePast)} | Expected finish: ${finishTime} (Total delay: ${minToHours(overtime)})`;
   } else if(isLate && !ignore) {
-    const lateBy = nowM - currentModuleEnd;
+    const lateBy = accumulatedDelay;
     document.getElementById("track").className="over";
     document.getElementById("track").innerText="Late";
-    document.getElementById("summary").innerText=`Running late by ${minToHours(lateBy)} | Expected finish: ${finishTime} (Total delay: ${minToHours(overtime)})`;
+    document.getElementById("summary").innerText=`${minToHours(lateBy)} behind | Expected finish: ${finishTime}`;
   } else {
     document.getElementById("track").className=overtime?"over":"ok";
     document.getElementById("track").innerText=overtime?"Behind":"On track";
@@ -241,7 +245,7 @@ function recalc(){
   if(pastDeadline && !ignore) {
     statusText = `Past deadline by ${minToHours(nowM - sleepM)}`;
   } else if(isLate && !ignore) {
-    statusText = `Late by ${minToHours(nowM - currentModuleEnd)}`;
+    statusText = `${minToHours(accumulatedDelay)} behind`;
   } else {
     statusText = overtime ? `Delay ${minToHours(overtime)}` : "On time";
   }
