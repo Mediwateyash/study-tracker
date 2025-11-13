@@ -26,6 +26,13 @@
   .ok{color:var(--good);font-weight:700;}
   .over{color:var(--bad);font-weight:700;}
   .small{font-size:13px;color:var(--muted);}
+  footer{text-align:center;padding:24px 16px;margin-top:32px;border-top:1px solid rgba(255,255,255,0.05);}
+  .footer-content{display:flex;flex-direction:column;gap:8px;align-items:center;}
+  .footer-links{display:flex;gap:16px;align-items:center;flex-wrap:wrap;justify-content:center;}
+  .footer-link{color:var(--accent);text-decoration:none;font-size:13px;transition:opacity 0.2s;}
+  .footer-link:hover{opacity:0.8;text-decoration:underline;}
+  .footer-text{color:var(--muted);font-size:12px;}
+  .footer-name{color:var(--accent);font-weight:600;}
 </style>
 </head>
 <body>
@@ -56,6 +63,19 @@
     </div>
     <div class="small" id="oneLine" style="margin-top:6px;"></div>
   </div>
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-text">
+        Designed and deployed by <a href="https://github.com/Mediwateyash" target="_blank" class="footer-link footer-name">diwateyash</a>
+      </div>
+      <div class="footer-links">
+        <a href="https://www.linkedin.com/in/diwateyash2004" target="_blank" class="footer-link">LinkedIn</a>
+        <span class="footer-text">•</span>
+        <span class="footer-text">notescloud by dy</span>
+      </div>
+    </div>
+  </footer>
 </div>
 
 <script>
