@@ -66,7 +66,7 @@
     <div class="status"><span id="track" class="ok">On track</span><span id="summary" class="small"></span></div>
     <div id="timeline"></div>
     <div class="small" style="margin-top:8px;">
-      Remaining study: <span id="studyMin"></span> min | Time until 2 AM: <span id="timeLeft"></span> min | Delay: <span id="overtime"></span> min
+      Remaining study: <span id="studyMin"></span> | Time until 2 AM: <span id="timeLeft"></span> | Delay: <span id="overtime"></span>
     </div>
     <div class="small" id="oneLine" style="margin-top:6px;"></div>
     <div id="completedSection" class="completed-section" style="display:none;">
@@ -104,6 +104,14 @@ function pad(n){return String(n).padStart(2,"0");}
 function nowHHMM(){let d=new Date();return pad(d.getHours())+":"+pad(d.getMinutes());}
 function mins(t){let [h,m]=t.split(":").map(Number);return h*60+m;}
 function timeStr(m){m=((m%1440)+1440)%1440;return pad(Math.floor(m/60))+":"+pad(m%60);}
+function minToHours(m){
+  if(m===0) return "0 hr";
+  const h=Math.floor(m/60);
+  const min=m%60;
+  if(h===0) return `${min} min`;
+  if(min===0) return `${h} hr`;
+  return `${h}:${pad(min)} hr`;
+}
 function loadFromStorage(){
   const saved=localStorage.getItem('studyTrackerData');
   if(saved){
@@ -187,12 +195,12 @@ function recalc(){
   const finishTime = timeStr(nowM + total);
   document.getElementById("track").className=overtime?"over":"ok";
   document.getElementById("track").innerText=overtime?"Behind":"On track";
-  document.getElementById("summary").innerText=overtime?`Expected finish: ${finishTime} (Delayed by ${overtime} min)`:`Expected finish: ${finishTime}`;
-  document.getElementById("studyMin").innerText=total;
-  document.getElementById("timeLeft").innerText=tillSleep;
-  document.getElementById("overtime").innerText=overtime;
+  document.getElementById("summary").innerText=overtime?`Expected finish: ${finishTime} (Delayed by ${minToHours(overtime)})`:`Expected finish: ${finishTime}`;
+  document.getElementById("studyMin").innerText=minToHours(total);
+  document.getElementById("timeLeft").innerText=minToHours(tillSleep);
+  document.getElementById("overtime").innerText=minToHours(overtime);
   let orderStr=rem.map(t=>"M"+t.id).join("→")||"All done";
-  document.getElementById("oneLine").innerText=`${nowT} | ${orderStr} | ${total} min left | ${overtime?"Delay "+overtime+" min":"On time"} | Finish ≈ ${finishTime}`;
+  document.getElementById("oneLine").innerText=`${nowT} | ${orderStr} | ${minToHours(total)} left | ${overtime?"Delay "+minToHours(overtime):"On time"} | Finish ≈ ${finishTime}`;
   
   showCompleted(completed,nowM);
 }
@@ -226,7 +234,7 @@ function showCompleted(completed,startTime){
     const completedAt=topic.completedAt?mins(topic.completedAt):null;
     if(!completedAt) return;
     const delay=completedAt-expectedEnd;
-    const delayStr=delay>0?`${delay} min late`:delay<0?`${Math.abs(delay)} min early`:"On time";
+    const delayStr=delay>0?`${minToHours(delay)} late`:delay<0?`${minToHours(Math.abs(delay))} early`:"On time";
     const delayClass=delay>0?"late":delay<0?"early":"on-time";
     const div=document.createElement("div");
     div.className="completed-item";
