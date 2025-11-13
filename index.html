@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BDA Study Progress Tracker — Yash</title>
+<style>
+  :root {
+    --bg:#0f1724;--card:#0b1220;--accent:#7dd3fc;--good:#22c55e;--bad:#ef4444;--text:#e5edf6;--muted:#94a3b8;
+  }
+  *{box-sizing:border-box;font-family:Inter,Segoe UI,Roboto,sans-serif;}
+  body{background:linear-gradient(180deg,#081122,#0b1626);color:var(--text);margin:0;padding:20px;}
+  .container{max-width:950px;margin:auto;}
+  header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
+  header h1{font-size:20px;margin:0;}
+  #clock{color:var(--accent);font-weight:700;}
+  .card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);padding:16px;border-radius:12px;margin-bottom:12px;}
+  label{font-size:13px;color:var(--muted);}
+  input{background:transparent;color:var(--text);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:6px 8px;}
+  .modules{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;}
+  .mod{background:#0c1a2f;border-radius:8px;padding:10px;min-width:170px;}
+  .mod h3{margin:0;font-size:14px;}
+  .line{display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:1px dashed rgba(255,255,255,0.05);}
+  .line:last-child{border-bottom:none;}
+  .status{display:flex;align-items:center;gap:8px;}
+  .ok{color:var(--good);font-weight:700;}
+  .over{color:var(--bad);font-weight:700;}
+  .small{font-size:13px;color:var(--muted);}
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>BDA (Big Data & Analytics) Study Tracker</h1>
+    <div id="clock">--:--:--</div>
+  </header>
+
+  <div class="card">
+    <div style="display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));">
+      <div><label>Current Time</label><input id="currentTime" type="time"></div>
+      <div><label>Target End (Sleep) Time</label><input id="sleepTime" type="time" value="02:00"></div>
+    </div>
+    <label style="margin-top:6px;display:block;"><input type="checkbox" id="ignoreSleep"> Ignore end time (manual overtime allowed)</label>
+  </div>
+
+  <div class="card">
+    <label>Modules (mark done / edit minutes)</label>
+    <div id="modules" class="modules"></div>
+  </div>
+
+  <div class="card">
+    <div class="status"><span id="track" class="ok">On track</span><span id="summary" class="small"></span></div>
+    <div id="timeline"></div>
+    <div class="small" style="margin-top:8px;">
+      Remaining study: <span id="studyMin"></span> min | Time until 2 AM: <span id="timeLeft"></span> min | Delay: <span id="overtime"></span> min
+    </div>
+    <div class="small" id="oneLine" style="margin-top:6px;"></div>
+  </div>
+</div>
+
+<script>
+const topics = [
+ {id:1,name:"Module 1 – Intro & Hadoop",min:20,done:false},
+ {id:2,name:"Module 2 – HDFS & MapReduce",min:25,done:false},
+ {id:3,name:"Module 3 – NoSQL",min:25,done:false},
+ {id:4,name:"Module 4 – Mining Data Streams",min:25,done:false},
+ {id:5,name:"Module 5 – Real-Time Big Data Models",min:25,done:false},
+ {id:6,name:"Module 6 – R Programming",min:25,done:false},
+ {id:7,name:"Final Revision",min:5,done:false}
+];
+const modulesDiv=document.getElementById("modules");
+function pad(n){return String(n).padStart(2,"0");}
+function nowHHMM(){let d=new Date();return pad(d.getHours())+":"+pad(d.getMinutes());}
+function mins(t){let [h,m]=t.split(":").map(Number);return h*60+m;}
+function timeStr(m){m=((m%1440)+1440)%1440;return pad(Math.floor(m/60))+":"+pad(m%60);}
+function buildUI(){
+  modulesDiv.innerHTML="";
+  topics.forEach(t=>{
+    const d=document.createElement("div");
+    d.className="mod";
+    d.innerHTML=`<h3>${t.name}</h3>
+    <label><input type="checkbox" data-id="${t.id}" ${t.done?"checked":""}/> Done</label><br>
+    <label>Minutes <input type="number" data-min="${t.id}" value="${t.min}"></label>`;
+    modulesDiv.appendChild(d);
+  });
+}
+function recalc(){
+  const nowT=document.getElementById("currentTime").value||nowHHMM();
+  const sleepT=document.getElementById("sleepTime").value;
+  const ignore=document.getElementById("ignoreSleep").checked;
+  const rem=[...modulesDiv.querySelectorAll(".mod")].map(el=>({
+     id:+el.querySelector("input[type=checkbox]").dataset.id,
+     name:el.querySelector("h3").innerText,
+     done:el.querySelector("input[type=checkbox]").checked,
+     min:+el.querySelector("input[type=number]").value||1
+  })).filter(x=>!x.done);
+  const nowM=mins(nowT),sleepM=mins(sleepT);
+  let tillSleep=(sleepM-nowM+1440)%1440;
+  let total=rem.reduce((s,a)=>s+a.min,0);
+  let diff = total - tillSleep;
+  let overtime = 0;
+  if (!ignore) {
+    if (diff > 0) overtime = diff;
+    else overtime = 0;
+  } else {
+    overtime = total>0?0:0;
+  }
+  const timeline=document.getElementById("timeline");
+  timeline.innerHTML="";
+  let ptr=nowM;
+  rem.forEach(t=>{
+    let st=ptr,en=ptr+t.min;ptr=en;
+    const div=document.createElement("div");
+    div.className="line";
+    div.innerHTML=`<span>${t.name}</span><span>${timeStr(st)} → ${timeStr(en)}</span>`;
+    timeline.appendChild(div);
+  });
+  const finishTime = timeStr(nowM + total);
+  document.getElementById("track").className=overtime?"over":"ok";
+  document.getElementById("track").innerText=overtime?"Behind":"On track";
+  document.getElementById("summary").innerText=overtime?`Expected finish: ${finishTime} (Delayed by ${overtime} min)`:`Expected finish: ${finishTime}`;
+  document.getElementById("studyMin").innerText=total;
+  document.getElementById("timeLeft").innerText=tillSleep;
+  document.getElementById("overtime").innerText=overtime;
+  let orderStr=rem.map(t=>"M"+t.id).join("→")||"All done";
+  document.getElementById("oneLine").innerText=`${nowT} | ${orderStr} | ${total} min left | ${overtime?"Delay "+overtime+" min":"On time"} | Finish ≈ ${finishTime}`;
+}
+function clock(){
+  let d=new Date();
+  document.getElementById("clock").innerText=d.toLocaleTimeString();
+  document.getElementById("currentTime").value=nowHHMM();
+}
+buildUI();
+setInterval(clock,1000);
+setInterval(recalc,1500);
+modulesDiv.addEventListener("change",recalc);
+document.querySelectorAll("input").forEach(i=>i.addEventListener("change",recalc));
+recalc();
+</script>
+</body>
+</html>
