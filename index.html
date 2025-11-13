@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>BDA Study Progress Tracker — Yash</title>
 <style>
   :root {
@@ -51,10 +51,11 @@
 
   <div class="card">
     <div style="display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));">
-      <div><label>Current Time</label><input id="currentTime" type="time" value="00:00"></div>
+      <div><label>Current Time</label><input id="currentTime" type="time" value=""></div>
       <div><label>Target End (Sleep) Time</label><input id="sleepTime" type="time" value="02:00"></div>
     </div>
     <label style="margin-top:6px;display:block;"><input type="checkbox" id="ignoreSleep"> Ignore end time (manual overtime allowed)</label>
+    <div class="small" style="margin-top:6px;color:var(--muted);">Tip: double-click the Current Time input to resume auto clock if you manually changed it.</div>
   </div>
 
   <div class="card">
@@ -160,7 +161,8 @@ function buildUI(){
   });
 }
 function recalc(){
-  const nowT=document.getElementById("currentTime").value||nowHHMM();
+  // Use value of currentTime input only if user manually set it. Otherwise use actual clock (auto-updated)
+  const nowT=document.getElementById("currentTime").value || nowHHMM();
   const sleepT=document.getElementById("sleepTime").value;
   const ignore=document.getElementById("ignoreSleep").checked;
   const allModules=[...modulesDiv.querySelectorAll(".mod")].map(el=>({
@@ -292,21 +294,42 @@ function showCompleted(completed,startTime){
     list.appendChild(div);
   });
 }
+
+/* ---------- Clock + Current Time auto-update fix ---------- */
+// If user manually edits the currentTime input we stop auto updates.
+// Double-click the time input to re-enable auto updates.
+let manualCurrentTime = false;
 function clock(){
   let d=new Date();
-  document.getElementById("clock").innerText=d.toLocaleTimeString();
+  const clockText = d.toLocaleTimeString();
+  document.getElementById("clock").innerText = clockText;
+  // Update the Current Time input only when not manually controlled
+  const currentInput = document.getElementById("currentTime");
+  if(!manualCurrentTime){
+    currentInput.value = pad(d.getHours()) + ":" + pad(d.getMinutes());
+  }
 }
+
+/* init schedule + event wiring */
 function initSchedule(){
   const currentTimeInput=document.getElementById("currentTime");
   const sleepTimeInput=document.getElementById("sleepTime");
-  if(!currentTimeInput.value) currentTimeInput.value="00:00";
+  if(!currentTimeInput.value) currentTimeInput.value=nowHHMM();
   if(!sleepTimeInput.value) sleepTimeInput.value="02:00";
+
+  // If user types or focuses, consider it manual override
+  currentTimeInput.addEventListener('input', ()=>{ manualCurrentTime = true; recalc(); });
+  currentTimeInput.addEventListener('focus', ()=>{ /* keep manual true if user focuses */ manualCurrentTime = true; });
+  // Double click to re-enable auto-update
+  currentTimeInput.addEventListener('dblclick', ()=>{ manualCurrentTime = false; recalc(); });
 }
+
 loadFromStorage();
 buildUI();
 initSchedule();
 setInterval(clock,1000);
 setInterval(recalc,1500);
+
 modulesDiv.addEventListener("change",function(e){
   if(e.target.type==="number"){
     const id=+e.target.dataset.min;
