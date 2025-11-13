@@ -26,6 +26,13 @@
   .ok{color:var(--good);font-weight:700;}
   .over{color:var(--bad);font-weight:700;}
   .small{font-size:13px;color:var(--muted);}
+  .completed-section{margin-top:16px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.05);}
+  .completed-item{display:flex;justify-content:space-between;align-items:center;padding:6px 0;font-size:12px;border-bottom:1px dashed rgba(255,255,255,0.03);}
+  .completed-item:last-child{border-bottom:none;}
+  .completed-time{color:var(--muted);}
+  .late{color:var(--bad);}
+  .early{color:var(--good);}
+  .on-time{color:var(--good);}
   footer{text-align:center;padding:24px 16px;margin-top:32px;border-top:1px solid rgba(255,255,255,0.05);}
   .footer-content{display:flex;flex-direction:column;gap:8px;align-items:center;}
   .footer-links{display:flex;gap:16px;align-items:center;flex-wrap:wrap;justify-content:center;}
@@ -62,6 +69,10 @@
       Remaining study: <span id="studyMin"></span> min | Time until 2 AM: <span id="timeLeft"></span> min | Delay: <span id="overtime"></span> min
     </div>
     <div class="small" id="oneLine" style="margin-top:6px;"></div>
+    <div id="completedSection" class="completed-section" style="display:none;">
+      <label style="display:block;margin-bottom:8px;color:var(--muted);font-size:13px;">Completed Modules:</label>
+      <div id="completedList"></div>
+    </div>
   </div>
 
   <footer>
@@ -79,20 +90,39 @@
 </div>
 
 <script>
-const topics = [
- {id:1,name:"Module 1 – Intro & Hadoop",min:20,done:false},
- {id:2,name:"Module 2 – HDFS & MapReduce",min:25,done:false},
- {id:3,name:"Module 3 – NoSQL",min:25,done:false},
- {id:4,name:"Module 4 – Mining Data Streams",min:25,done:false},
- {id:5,name:"Module 5 – Real-Time Big Data Models",min:25,done:false},
- {id:6,name:"Module 6 – R Programming",min:25,done:false},
- {id:7,name:"Final Revision",min:5,done:false}
+let topics = [
+ {id:1,name:"Module 1 – Intro & Hadoop",min:20,done:false,completedAt:null},
+ {id:2,name:"Module 2 – HDFS & MapReduce",min:25,done:false,completedAt:null},
+ {id:3,name:"Module 3 – NoSQL",min:25,done:false,completedAt:null},
+ {id:4,name:"Module 4 – Mining Data Streams",min:25,done:false,completedAt:null},
+ {id:5,name:"Module 5 – Real-Time Big Data Models",min:25,done:false,completedAt:null},
+ {id:6,name:"Module 6 – R Programming",min:25,done:false,completedAt:null},
+ {id:7,name:"Final Revision",min:5,done:false,completedAt:null}
 ];
 const modulesDiv=document.getElementById("modules");
 function pad(n){return String(n).padStart(2,"0");}
 function nowHHMM(){let d=new Date();return pad(d.getHours())+":"+pad(d.getMinutes());}
 function mins(t){let [h,m]=t.split(":").map(Number);return h*60+m;}
 function timeStr(m){m=((m%1440)+1440)%1440;return pad(Math.floor(m/60))+":"+pad(m%60);}
+function loadFromStorage(){
+  const saved=localStorage.getItem('studyTrackerData');
+  if(saved){
+    try{
+      const data=JSON.parse(saved);
+      topics.forEach(t=>{
+        const savedT=data.find(s=>s.id===t.id);
+        if(savedT){
+          t.done=savedT.done||false;
+          t.completedAt=savedT.completedAt||null;
+          if(savedT.min) t.min=savedT.min;
+        }
+      });
+    }catch(e){}
+  }
+}
+function saveToStorage(){
+  localStorage.setItem('studyTrackerData',JSON.stringify(topics));
+}
 function buildUI(){
   modulesDiv.innerHTML="";
   topics.forEach(t=>{
@@ -103,17 +133,36 @@ function buildUI(){
     <label>Minutes <input type="number" data-min="${t.id}" value="${t.min}"></label>`;
     modulesDiv.appendChild(d);
   });
+  modulesDiv.querySelectorAll('input[type="checkbox"]').forEach(cb=>{
+    cb.addEventListener('change',function(e){
+      const id=+this.dataset.id;
+      const topic=topics.find(t=>t.id===id);
+      if(topic){
+        if(this.checked && !topic.done){
+          topic.completedAt=nowHHMM();
+          topic.done=true;
+        }else if(!this.checked){
+          topic.completedAt=null;
+          topic.done=false;
+        }
+        saveToStorage();
+        recalc();
+      }
+    });
+  });
 }
 function recalc(){
   const nowT=document.getElementById("currentTime").value||nowHHMM();
   const sleepT=document.getElementById("sleepTime").value;
   const ignore=document.getElementById("ignoreSleep").checked;
-  const rem=[...modulesDiv.querySelectorAll(".mod")].map(el=>({
+  const allModules=[...modulesDiv.querySelectorAll(".mod")].map(el=>({
      id:+el.querySelector("input[type=checkbox]").dataset.id,
      name:el.querySelector("h3").innerText,
      done:el.querySelector("input[type=checkbox]").checked,
      min:+el.querySelector("input[type=number]").value||1
-  })).filter(x=>!x.done);
+  }));
+  const rem=allModules.filter(x=>!x.done);
+  const completed=allModules.filter(x=>x.done);
   const nowM=mins(nowT),sleepM=mins(sleepT);
   let tillSleep=(sleepM-nowM+1440)%1440;
   let total=rem.reduce((s,a)=>s+a.min,0);
@@ -144,17 +193,66 @@ function recalc(){
   document.getElementById("overtime").innerText=overtime;
   let orderStr=rem.map(t=>"M"+t.id).join("→")||"All done";
   document.getElementById("oneLine").innerText=`${nowT} | ${orderStr} | ${total} min left | ${overtime?"Delay "+overtime+" min":"On time"} | Finish ≈ ${finishTime}`;
+  
+  showCompleted(completed,nowM);
+}
+function showCompleted(completed,startTime){
+  const section=document.getElementById("completedSection");
+  const list=document.getElementById("completedList");
+  if(completed.length===0){
+    section.style.display="none";
+    return;
+  }
+  section.style.display="block";
+  list.innerHTML="";
+  let ptr=startTime;
+  const completedMap=new Map(completed.map(c=>[c.id,c]));
+  const allModules=[...modulesDiv.querySelectorAll(".mod")].map(el=>({
+     id:+el.querySelector("input[type=checkbox]").dataset.id,
+     name:el.querySelector("h3").innerText,
+     min:+el.querySelector("input[type=number]").value||1
+  }));
+  const moduleMap=new Map(allModules.map(m=>[m.id,m]));
+  topics.forEach(topic=>{
+    if(!completedMap.has(topic.id)) {
+      const mod=moduleMap.get(topic.id);
+      if(mod) ptr+=mod.min;
+      return;
+    }
+    const c=completedMap.get(topic.id);
+    const mod=moduleMap.get(topic.id);
+    const expectedEnd=ptr+(mod?mod.min:topic.min);
+    ptr=expectedEnd;
+    const completedAt=topic.completedAt?mins(topic.completedAt):null;
+    if(!completedAt) return;
+    const delay=completedAt-expectedEnd;
+    const delayStr=delay>0?`${delay} min late`:delay<0?`${Math.abs(delay)} min early`:"On time";
+    const delayClass=delay>0?"late":delay<0?"early":"on-time";
+    const div=document.createElement("div");
+    div.className="completed-item";
+    div.innerHTML=`<span>${c.name}</span><span class="completed-time"><span class="${delayClass}">Completed at ${timeStr(completedAt)} (${delayStr})</span> | Expected: ${timeStr(expectedEnd)}</span>`;
+    list.appendChild(div);
+  });
 }
 function clock(){
   let d=new Date();
   document.getElementById("clock").innerText=d.toLocaleTimeString();
   document.getElementById("currentTime").value=nowHHMM();
 }
+loadFromStorage();
 buildUI();
 setInterval(clock,1000);
 setInterval(recalc,1500);
-modulesDiv.addEventListener("change",recalc);
-document.querySelectorAll("input").forEach(i=>i.addEventListener("change",recalc));
+modulesDiv.addEventListener("change",function(e){
+  if(e.target.type==="number"){
+    const id=+e.target.dataset.min;
+    const topic=topics.find(t=>t.id===id);
+    if(topic) topic.min=+e.target.value||1;
+    saveToStorage();
+  }
+  recalc();
+});
+document.querySelectorAll("#currentTime, #sleepTime, #ignoreSleep").forEach(i=>i.addEventListener("change",recalc));
 recalc();
 </script>
 </body>
